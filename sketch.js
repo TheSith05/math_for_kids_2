@@ -319,6 +319,9 @@ function buildMathTree(a, op, b, eqY) {
   let stepX = UI.nodeW * 1.1; 
 
   let centerX = width / 2;
+
+  // ВОТ ЭТА СТРОКА ДОЛЖНА БЫТЬ ОБЯЗАТЕЛЬНО:
+  let splitX = UI.nodeW * 1.15;
   
   // ИДЕАЛЬНАЯ СИММЕТРИЯ
   // Разносим левое и правое число на одинаковое расстояние от центра (на 2.8 ширины цифры)
@@ -386,61 +389,57 @@ function buildMathTree(a, op, b, eqY) {
   else if (op === '-') {
     if (aUnits < bUnits) {
       // --- СОСТОЯНИЕ 3: Вычитание с переходом ---
+      // ==================== ВЫЧИТАНИЕ С ПЕРЕХОДОМ ====================
       let subTens = bTens * 10;
       let part1 = aUnits;
       let part2 = bUnits - aUnits;
-      let baseTensLeft = (aTens - bTens - 1) * 10;
-      let intermediate = a - subTens; 
+      
+      let intermediate = a - subTens; // Промежуточный ответ (например, 31)
+      let baseTensLeft = intermediate - part1;
 
-      // Правое дерево (B)
+      // --- Правое дерево (B) ---
       if (subTens > 0) {
         let nSubTens = new MathNode(subTens.toString(), nodeB.x - stepX, nodeB.y + firstStepY, tiles.blue);
         nodeB.addChild(nSubTens);
       }
       let nUnitsX = subTens > 0 ? nodeB.x + stepX : nodeB.x;
-      
-      // ИСПРАВЛЕНИЕ 2: Если part1 == 0 (как в 30-12), усов не будет. Значит сама цифра становится красной!
       let unitsColor = (part1 > 0) ? tiles.base : tiles.red;
       let nUnits = new MathNode(bUnits.toString(), nUnitsX, nodeB.y + firstStepY, unitsColor);
       nodeB.addChild(nUnits);
 
       if (part1 > 0) {
-        let whiskersY = nodeB.y + firstStepY + (stepY * 2);
-        nUnits.addChild(new MathNode(part1.toString(), nUnits.x - stepX, whiskersY, tiles.green));
-        nUnits.addChild(new MathNode(part2.toString(), nUnits.x + stepX, whiskersY, tiles.red));
+        let whiskersY = nodeB.y + firstStepY + (stepY * 1.8);
+        nUnits.addChild(new MathNode(part1.toString(), nUnits.x - splitX, whiskersY, tiles.green));
+        nUnits.addChild(new MathNode(part2.toString(), nUnits.x + splitX, whiskersY, tiles.red));
       }
 
-      // Левое дерево (A)
+      // --- Левое дерево (A) ---
       let currentNode = nodeA;
       let colY = currentNode.y;
 
       if (subTens > 0) {
         colY += firstStepY; 
         let n1 = new MathNode(subTens.toString(), currentNode.x, colY, tiles.blue);
-        n1.underline = true; 
+        n1.underline = true; // Черта под вычитанием десятков (например, под 60)
         currentNode.addChild(n1, false);
         
+        // Рисуем промежуточный ответ (например, 31)
         colY += stepY;
         let nInter = new MathNode(intermediate.toString(), currentNode.x, colY);
-        n1.addChild(nInter, false);
-        currentNode = nInter;
-      }
-
-      if (part1 > 0) {
-        colY += stepY;
-        let n2 = new MathNode(part1.toString(), currentNode.x, colY, tiles.green);
-        currentNode.addChild(n2, false);
-        currentNode = n2;
-      }
-
-      colY += stepY;
-      let n3 = new MathNode("10", currentNode.x, colY, tiles.red);
-      currentNode.addChild(n3, false);
-      
-      if (baseTensLeft > 0) {
-        colY += stepY;
-        let n4 = new MathNode(baseTensLeft.toString(), currentNode.x, colY);
-        n3.addChild(n4, false);
+        n1.addChild(nInter, false); // Без линии, просто следующий шаг вниз
+        
+        // ТЕПЕРЬ ОТ 31 РИСУЕМ УСЫ (1 и 30)
+        if (part1 > 0) {
+          let leftBranchY = colY + (stepY * 1.5);
+          
+          // Левый ус: единицы (зеленый)
+          let nLeftLeaf = new MathNode(part1.toString(), nInter.x - splitX, leftBranchY, tiles.green);
+          // Правый ус: оставшиеся десятки (красный) — например, 30
+          let nRightLeaf = new MathNode(baseTensLeft.toString(), nInter.x + splitX, leftBranchY, tiles.red);
+          
+          nInter.addChild(nLeftLeaf, true);  // true включит отрисовку красивой скобки-усика со стрелкой
+          nInter.addChild(nRightLeaf, true);
+        }
       }
 
     } else {

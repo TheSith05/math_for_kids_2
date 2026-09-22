@@ -28,7 +28,19 @@ const keys = ['1','2','3','4','5','6','7','8','9','C','0','OK'];
 // ИНИЦИАЛИЗАЦИЯ И СОЗДАНИЕ ИНТЕРФЕЙСА
 // =========================================================
 async function setup() {
+
+  // Блокируем зум на мобильных устройствах при двойном тапе
+  //et meta = document.createElement('meta');
+  //meta.name = 'viewport';
+  //meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0';
+  //document.head.appendChild(meta);
+  //document.body.style.touchAction = 'manipulation';
+
   createCanvas(windowWidth, windowHeight);
+
+  // Делаем масштаб чисел зависимым от ширины экрана (максимум 128)
+  UI.eqH = min(128, width / 6); 
+  UI.nodeH = UI.eqH * 0.7; // Размер нижних узлов пропорционален верхним
 
   tiles.base = await loadImage('numbers_1.png');
   tiles.blue = await loadImage('numbers_2.png');
@@ -63,6 +75,7 @@ async function setup() {
     btn.style('border-radius', '16px'); // Сильное закругление
     btn.style('border', 'none');
     btn.style('box-shadow', '0 4px 6px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08)'); // Внешняя тень (объем)
+    btn.style('touch-action', 'manipulation'); // Блокирует зум по двойному тапу на кнопке
     
     // Раскрашиваем спец-кнопки
     if (keys[i] === 'C') {
@@ -118,11 +131,11 @@ function draw() {
   currentExample.rightTree.draw();
 
   if (feedbackMessage !== "") {
-    textSize(28);
+    textSize(54);
     textAlign(CENTER, CENTER);
     fill(isSuccess ? '#4CAF50' : '#F44336');
-    // Текст поднимаем чуть выше
-    text(feedbackMessage, centerX, eqY - (UI.eqH * 0.5)); 
+    // Переносим текст на 30 пикселей выше поля ввода
+    text(feedbackMessage, centerX, answerInput.y - 30); 
   }
 }
 
@@ -140,12 +153,11 @@ function positionUI() {
   let gap = 10;
   let inputH = 80;
 
-  // ДЕЛАЕМ КНОПКИ ПРЯМОУГОЛЬНЫМИ:
   // Ширина зависит от экрана (занимаем около 88% ширины в три колонки)
   let btnW = (width * 0.88 - (gap * 2)) / 3; 
-  let btnH = btnW*0.65; // Фиксированная высота (меньше ширины — получаются прямоугольники)
+  let btnH = btnW * 0.65; // Фиксированная пропорция высоты
 
-  // Высчитываем общую высоту блока клавиатуры (4 ряда прямоугольных кнопок + поле ввода)
+  // Высчитываем общую высоту блока клавиатуры
   let padHeight = (btnH * 4) + (gap * 3);
   let totalUiHeight = padHeight + gap + inputH;
 
@@ -158,8 +170,11 @@ function positionUI() {
   
   // Поле ввода растягиваем ровно по ширине всей клавиатуры
   let inputW = btnW * 3 + gap * 2;
-  answerInput.position(padX, uiStartY); 
-  answerInput.size(inputW, inputH);
+  
+  if (answerInput) {
+    answerInput.position(padX, uiStartY); 
+    answerInput.size(inputW, inputH);
+  }
   
   // Расставляем прямоугольные кнопки сеткой 3x4
   let padY = uiStartY + inputH + gap; 
@@ -170,31 +185,52 @@ function positionUI() {
     let x = padX + col * (btnW + gap);
     let y = padY + row * (btnH + gap);
     
-    numpadButtons[i].position(x, y);
-    for(let i = 0; i < 12; i++) {
-    let col = i % 3;
-    let row = Math.floor(i / 3);
-    
-    let x = padX + col * (btnW + gap);
-    let y = padY + row * (btnH + gap);
-    
-    numpadButtons[i].position(x, y);
-    numpadButtons[i].size(btnW, btnH); // ИСПРАВЛЕНИЕ: вызываем size у конкретной кнопки [i]
-  }
+    if (numpadButtons[i]) {
+      numpadButtons[i].position(x, y);
+      numpadButtons[i].size(btnW, btnH);
+    }
   }
 }
 
 function generateRandomExample() {
   let isPlus = random([true, false]);
   let a, b, op;
+  
+  // Вероятность 66% (2 к 1), что потребуется переход через десяток
+  let needTransition = random() < 0.66;
+  let isValid = false;
 
-  if (isPlus) {
-    op = '+'; a = floor(random(11, 80)); b = floor(random(11, 100 - a));
-  } else {
-    op = '-'; a = floor(random(21, 99)); b = floor(random(11, a));
+  while (!isValid) {
+    if (isPlus) {
+      op = '+'; 
+      a = floor(random(11, 80)); 
+      b = floor(random(11, 100 - a));
+      
+      let aUnits = a % 10;
+      let bUnits = b % 10;
+      // Переход при сложении: сумма единиц 10 или больше
+      let hasTransition = (aUnits + bUnits >= 10);
+      
+      if (hasTransition === needTransition) {
+        isValid = true;
+      }
+    } else {
+      op = '-'; 
+      a = floor(random(21, 99)); 
+      b = floor(random(11, a));
+      
+      let aUnits = a % 10;
+      let bUnits = b % 10;
+      // Переход при вычитании: единиц в первом числе меньше, чем во втором
+      let hasTransition = (aUnits < bUnits);
+      
+      if (hasTransition === needTransition) {
+        isValid = true;
+      }
+    }
   }
 
-  // ПРИЖИМАЕМ ВВЕРХ: Здесь тоже меняем отступ на 0.8
+  // ПРИЖИМАЕМ ВВЕРХ
   let eqY = UI.eqH * 0.8;
   currentExample = buildMathTree(a, op, b, eqY); 
 
@@ -387,15 +423,14 @@ function buildMathTree(a, op, b, eqY) {
 
   // ==================== ВЫЧИТАНИЕ ====================
   else if (op === '-') {
+    let subTens = bTens * 10;
+    let remainderA = a - subTens; // Промежуточный остаток (например, 82 - 60 = 22)
+
     if (aUnits < bUnits) {
-      // --- СОСТОЯНИЕ 3: Вычитание с переходом ---
-      // ==================== ВЫЧИТАНИЕ С ПЕРЕХОДОМ ====================
-      let subTens = bTens * 10;
+      // --- Вычитание с переходом ---
       let part1 = aUnits;
       let part2 = bUnits - aUnits;
-      
-      let intermediate = a - subTens; // Промежуточный ответ (например, 31)
-      let baseTensLeft = intermediate - part1;
+      let baseTensLeft = remainderA - part1; // То, что останется от десятков после вычитания part1
 
       // --- Правое дерево (B) ---
       if (subTens > 0) {
@@ -403,8 +438,7 @@ function buildMathTree(a, op, b, eqY) {
         nodeB.addChild(nSubTens);
       }
       let nUnitsX = subTens > 0 ? nodeB.x + stepX : nodeB.x;
-      let unitsColor = (part1 > 0) ? tiles.base : tiles.red;
-      let nUnits = new MathNode(bUnits.toString(), nUnitsX, nodeB.y + firstStepY, unitsColor);
+      let nUnits = new MathNode(bUnits.toString(), nUnitsX, nodeB.y + firstStepY, tiles.base);
       nodeB.addChild(nUnits);
 
       if (part1 > 0) {
@@ -413,51 +447,32 @@ function buildMathTree(a, op, b, eqY) {
         nUnits.addChild(new MathNode(part2.toString(), nUnits.x + splitX, whiskersY, tiles.red));
       }
 
-      // --- Левое дерево (A) ---
-      let currentNode = nodeA;
-      let colY = currentNode.y;
-
+      // --- Левое дерево (A) - ТЕПЕРЬ С УСАМИ ---
       if (subTens > 0) {
-        colY += firstStepY; 
-        let n1 = new MathNode(subTens.toString(), currentNode.x, colY, tiles.blue);
-        n1.underline = true; // Черта под вычитанием десятков (например, под 60)
-        currentNode.addChild(n1, false);
+        // Усы от главного числа: вычитаемые десятки (синие) и промежуточный остаток (базовый цвет)
+        let nSubTens = new MathNode(subTens.toString(), nodeA.x - splitX, nodeA.y + firstStepY, tiles.blue);
+        let nInter = new MathNode(remainderA.toString(), nodeA.x + splitX, nodeA.y + firstStepY, tiles.base);
         
-        // Рисуем промежуточный ответ (например, 31)
-        colY += stepY;
-        let nInter = new MathNode(intermediate.toString(), currentNode.x, colY);
-        n1.addChild(nInter, false); // Без линии, просто следующий шаг вниз
+        nodeA.addChild(nSubTens, true);
+        nodeA.addChild(nInter, true);
         
-        // ТЕПЕРЬ ОТ 31 РИСУЕМ УСЫ (1 и 30)
+        // Усы от промежуточного остатка (например, от 22 делаем усы на 2 и 20)
         if (part1 > 0) {
-          let leftBranchY = colY + (stepY * 1.5);
+          // ИСПРАВЛЕНИЕ: Меняем 1.5 на 1.8 для идеальной симметрии с правым деревом
+          let leftBranchY = nInter.y + (stepY * 1.8); 
           
-          // Левый ус: единицы (зеленый)
           let nLeftLeaf = new MathNode(part1.toString(), nInter.x - splitX, leftBranchY, tiles.green);
-          // Правый ус: оставшиеся десятки (красный) — например, 30
           let nRightLeaf = new MathNode(baseTensLeft.toString(), nInter.x + splitX, leftBranchY, tiles.red);
           
-          nInter.addChild(nLeftLeaf, true);  // true включит отрисовку красивой скобки-усика со стрелкой
+          nInter.addChild(nLeftLeaf, true);
           nInter.addChild(nRightLeaf, true);
         }
       }
 
     } else {
-      // --- СОСТОЯНИЕ 4: Вычитание без перехода ---
-      let subTens = bTens * 10;
-
-      if (subTens > 0) {
-        let remainderA = a - subTens;
-        let nA_1 = new MathNode(subTens.toString(), nodeA.x, nodeA.y + firstStepY, tiles.blue);
-        
-        // ИСПРАВЛЕНИЕ 1: Включаем горизонтальную черту в простом вычитании!
-        nA_1.underline = true; 
-        
-        let nA_2 = new MathNode(remainderA.toString(), nodeA.x, nodeA.y + firstStepY + stepY, tiles.green);
-        nodeA.addChild(nA_1, false);
-        nA_1.addChild(nA_2, false);
-      }
-
+      // --- Вычитание без перехода ---
+      
+      // --- Правое дерево (B) ---
       if (subTens > 0) {
         let tX = bUnits > 0 ? nodeB.x - stepX : nodeB.x;
         let nB_tens = new MathNode(subTens.toString(), tX, nodeB.y + firstStepY, tiles.blue);
@@ -468,6 +483,16 @@ function buildMathTree(a, op, b, eqY) {
         let nUnitsX = subTens > 0 ? nodeB.x + stepX : nodeB.x;
         let nB_units = new MathNode(bUnits.toString(), nUnitsX, nodeB.y + firstStepY, tiles.green);
         nodeB.addChild(nB_units);
+      }
+
+      // --- Левое дерево (A) - ТЕПЕРЬ С УСАМИ ---
+      if (subTens > 0) {
+        // Усы от главного числа: десятки (синие) и финальный остаток (зеленый)
+        let nA_1 = new MathNode(subTens.toString(), nodeA.x - splitX, nodeA.y + firstStepY, tiles.blue);
+        let nA_2 = new MathNode(remainderA.toString(), nodeA.x + splitX, nodeA.y + firstStepY, tiles.green);
+        
+        nodeA.addChild(nA_1, true);
+        nodeA.addChild(nA_2, true);
       }
     }
   }
